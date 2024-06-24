@@ -3,6 +3,7 @@ import logging
 
 from datetime import datetime
 from django.core.exceptions import ObjectDoesNotExist, MultipleObjectsReturned
+from django.apps import AppConfig
 
 from nautobot.extras.jobs import Job, MultiObjectVar, ObjectVar, BooleanVar
 from nautobot.extras.models import Tag
@@ -41,6 +42,13 @@ def git_wrapper(obj, git_type):
     git_repo = GitRepo(orm_obj)
     return git_repo
 
+def object_lookup(data):
+    """ Lookup django object from rest api passed json """
+    for field,value in data.iteritems():
+        if field != "debug":           
+            model = AppConfig.get_model(field, require_ready=True)
+            if data.get(field) and not isinstance(field, model):
+                data[field] = model.objects.filter(name__exact=data[field])
 
 def commit_check(method):
     """Decorator to check if a "dry-run" attempt was made."""
@@ -202,6 +210,9 @@ class AllGoldenConfig(Job):
     @commit_check
     def run(self, data, commit):
         """Run all jobs."""
+        """Get Django object from passed rest api json"""
+        if data.get("device") and not isinstance(data["device"], Device):
+            data["device"] = Device.objects.filter(name__exact=data["device"])
         if ENABLE_INTENDED:
             IntendedJob().run.__func__(self, data, True)
         if ENABLE_BACKUP:
